@@ -191,6 +191,7 @@ func getDevice(u string) (*Device, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	var d Device
 	dec := xml.NewDecoder(resp.Body)
