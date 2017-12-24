@@ -34,7 +34,9 @@ const (
 	BasicEventEventPath   = "/upnp/event/basicevent1"
 	InsightPath           = "/upnp/control/insight1"
 
-	subscribeTimeout = 300
+	subscribeTimeout    = 90 * time.Minute
+	resubscribeInterval = 85 * time.Minute
+	discoveryInterval   = 30 * time.Second
 )
 
 // TODO: I only have Insight devices, so they're the only ones
@@ -333,7 +335,7 @@ func main() {
 	go func(ctx context.Context) {
 		discoverDevices(hcConfig)
 
-		t := time.NewTicker(30 * time.Second)
+		t := time.NewTicker(discoveryInterval)
 		defer t.Stop()
 
 		for {
@@ -345,11 +347,9 @@ func main() {
 		}
 	}(ctx)
 
-	// Refresh any device subscriptions every 4 minutes (they are
-	// subscribed with 5 minute timeouts)
+	// Refresh device subscriptions
 	go func(ctx context.Context) {
-		// Refresh
-		t := time.NewTicker(60 * time.Second)
+		t := time.NewTicker(resubscribeInterval)
 		defer t.Stop()
 
 		for {
@@ -471,14 +471,14 @@ func setBinaryStateRequest(baseURL string, on bool) (*http.Request, error) {
 	return req, nil
 }
 
-func subscribeRequest(baseURL, sid string, ip net.IP, timeout int) (*http.Request, error) {
+func subscribeRequest(baseURL, sid string, ip net.IP, timeout time.Duration) (*http.Request, error) {
 	url := baseURL + BasicEventEventPath
 	req, err := http.NewRequest("SUBSCRIBE", url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Add("Timeout", fmt.Sprintf("Second-%d", timeout))
+	req.Header.Add("Timeout", fmt.Sprintf("Second-%d", int64(timeout/time.Second)))
 
 	if sid != "" {
 		req.Header.Add("SID", sid)

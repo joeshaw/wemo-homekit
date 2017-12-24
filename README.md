@@ -29,7 +29,7 @@ startup, and even every 30 seconds afterward.
 To pair, open up your Home iOS app, click the + icon, choose "Add
 Accessory" and then tap "Don't have a Code or Can't Scan?"  You should
 see the Leaf under "Nearby Accessories."  Tap that and enter the PIN
-00102003.  You should one entry appear for each of the Wemo devices on
+00102003.  You should see one entry appear for each Wemo device on
 your network.
 
 ## Contributing
