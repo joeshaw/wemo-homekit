@@ -10,22 +10,25 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/brutella/hc"
 	"github.com/brutella/hc/accessory"
+	"github.com/brutella/hc/characteristic"
 	ssdp "github.com/koron/go-ssdp"
 )
 
 const (
-	BridgeDeviceURN     = "urn:Belkin:device:bridge:1"
-	ControlleeDeviceURN = "urn:Belkin:device:controllee:1"
-	LightDeviceURN      = "urn:Belkin:device:light:1"
-	SensorDeviceURN     = "urn:Belkin:device:sensor:1"
-	NetCamDeviceURN     = "urn:Belkin:device:netcam:1"
-	InsightDeviceURN    = "urn:Belkin:device:insight:1"
+	BridgeDeviceURN      = "urn:Belkin:device:bridge:1"
+	ControlleeDeviceURN  = "urn:Belkin:device:controllee:1" // simple switch
+	LightDeviceURN       = "urn:Belkin:device:light:1"
+	SensorDeviceURN      = "urn:Belkin:device:sensor:1" // motion sensor
+	NetCamDeviceURN      = "urn:Belkin:device:netcam:1"
+	InsightDeviceURN     = "urn:Belkin:device:insight:1" // switch with power monitoring
+	LightSwitchDeviceURN = "urn:Belkin:device:lightswitch:1"
 
 	BasicEventServiceURN = "urn:Belkin:service:basicevent:1"
 	InsightServiceURN    = "urn:Belkin:service:insight:1"
@@ -34,15 +37,22 @@ const (
 	BasicEventEventPath   = "/upnp/event/basicevent1"
 	InsightPath           = "/upnp/control/insight1"
 
-	subscribeTimeout    = 90 * time.Minute
-	resubscribeInterval = 85 * time.Minute
-	discoveryInterval   = 30 * time.Second
+	subscribeTimeout         = 90 * time.Minute
+	resubscribeInterval      = 85 * time.Minute
+	discoveryInterval        = 30 * time.Second
+	powerConsumptionInterval = 30 * time.Second
+
+	// UUID for power consumption, used by the Eve app
+	consumptionUUID = "E863F10D-079E-48FF-8F27-9C2605A29F52"
 )
 
-// TODO: I only have Insight devices, so they're the only ones
-// supported today.  It should be trivial to support at least lights
-// and sensors though.
-var supportedDeviceTypes = []string{InsightDeviceURN}
+// TODO: Currently only simple switch devices are supported.  It
+// should be simple to add to these, though.
+var supportedDeviceTypes = []string{
+	ControlleeDeviceURN,
+	InsightDeviceURN,
+	LightSwitchDeviceURN,
+}
 
 type Device struct {
 	Type         string `xml:"device>deviceType"`
@@ -56,6 +66,7 @@ type Device struct {
 	sid     string
 
 	accessory *accessory.Switch
+	power     *characteristic.Int
 	transport hc.Transport
 }
 
@@ -158,6 +169,66 @@ func (d *Device) Unsubscribe() error {
 	return nil
 }
 
+func (d *Device) InsightParams() (*InsightParams, error) {
+	req, err := newInsightRequest(d.baseURL, "GetInsightParams")
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var res struct {
+		InsightParams string `xml:"Body>GetInsightParamsResponse>InsightParams"`
+	}
+
+	dec := xml.NewDecoder(resp.Body)
+	if err := dec.Decode(&res); err != nil {
+		return nil, err
+	}
+
+	atoi := func(x string) int {
+		i, err := strconv.Atoi(x)
+		if err != nil {
+			panic(err)
+		}
+		return i
+	}
+
+	// Meanings of these parts taken mostly from pywemo
+	parts := strings.Split(res.InsightParams, "|")
+	return &InsightParams{
+		State:            parts[0] != "0",
+		LastChange:       time.Unix(int64(atoi(parts[1])), 0),
+		OnFor:            time.Duration(atoi(parts[2])) * time.Second,
+		OnToday:          time.Duration(atoi(parts[3])) * time.Second,
+		OnTotal:          time.Duration(atoi(parts[4])) * time.Second,
+		TimePeriod:       time.Duration(atoi(parts[5])) * time.Second,
+		CurrentMW:        atoi(parts[7]),
+		TodayMWPerMinute: atoi(parts[8]),
+		// TotalMW is presented as a float, but always has 0 fractional part
+		TotalMWPerMinute: atoi(strings.Split(parts[9], ".")[0]),
+		PowerThreshold:   atoi(parts[10]),
+	}, nil
+
+}
+
+type InsightParams struct {
+	State            bool
+	LastChange       time.Time
+	OnFor            time.Duration
+	OnToday          time.Duration
+	OnTotal          time.Duration
+	TimePeriod       time.Duration
+	CurrentMW        int
+	TodayMWPerMinute int
+	TotalMWPerMinute int
+	PowerThreshold   int
+}
+
 var devices = struct {
 	sync.Mutex
 	m map[string]*Device
@@ -245,6 +316,14 @@ func discoverDevices(hcConfig hc.Config) error {
 		log.Printf("Found %s", d)
 
 		sw := accessory.NewSwitch(info)
+
+		if d.Type == InsightDeviceURN {
+			d.power = characteristic.NewInt(consumptionUUID)
+			d.power.Characteristic.Unit = "W"
+			sw.Switch.AddCharacteristic(d.power.Characteristic)
+			updatePower(d)
+		}
+
 		t, err := hc.NewIPTransport(hcConfig, sw.Accessory)
 		if err != nil {
 			return err
@@ -266,6 +345,21 @@ func discoverDevices(hcConfig hc.Config) error {
 	}
 
 	return nil
+}
+
+func updatePower(d *Device) {
+	if d.power == nil {
+		log.Printf("No power characteristic on %s", d)
+		return
+	}
+
+	p, err := d.InsightParams()
+	if err != nil {
+		log.Printf("Unable to get power usage for %s: %s", d, err)
+		return
+	}
+
+	d.power.SetValue(p.CurrentMW / 1000)
 }
 
 func main() {
@@ -362,6 +456,33 @@ func main() {
 					}
 				}
 				devices.Unlock()
+
+			case <-ctx.Done():
+			}
+		}
+	}(ctx)
+
+	// Update power usage stats on Insight switches
+	go func(ctx context.Context) {
+		t := time.NewTicker(powerConsumptionInterval)
+		defer t.Stop()
+
+		for {
+			select {
+			case <-t.C:
+				var insights []*Device
+
+				devices.Lock()
+				for _, d := range devices.m {
+					if d.Type == InsightDeviceURN {
+						insights = append(insights, d)
+					}
+				}
+				devices.Unlock()
+
+				for _, d := range insights {
+					updatePower(d)
+				}
 
 			case <-ctx.Done():
 			}
