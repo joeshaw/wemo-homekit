@@ -4,9 +4,10 @@
 HomeKit support for Wemo devices using
 [HomeControl](https://github.com/brutella/hc).
 
-Currently this service only supports the Wemo "insight" switches,
-because that's all I have.  But it should be trivial to get things
-running for other simple on/off switches.
+Currently this service only supports Wemo (outlet) switches and light
+switches.  If it is a newer "insight" switch, power consumption is
+reported with characteristics that are compatible with the [Elgato
+Eve](https://itunes.apple.com/us/app/elgato-eve/id917695792?mt=8) app.
 
 Once the device is paired with your iOS Home app, you can control it
 with any service that integrates with HomeKit, including Siri ("Turn
