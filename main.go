@@ -433,6 +433,10 @@ func main() {
 		}
 		d.accessory.Switch.On.SetValue(on)
 		log.Printf("%s switched to %t", d, on)
+
+		if d.Type == InsightDeviceURN {
+			updatePower(d)
+		}
 	})
 
 	go func() {
