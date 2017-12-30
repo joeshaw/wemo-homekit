@@ -18,6 +18,8 @@ import (
 	"github.com/brutella/hc"
 	"github.com/brutella/hc/accessory"
 	"github.com/brutella/hc/characteristic"
+	hclog "github.com/brutella/hc/log"
+	"github.com/brutella/hc/service"
 	ssdp "github.com/koron/go-ssdp"
 )
 
@@ -289,10 +291,10 @@ func discoverDevices(hcConfig hc.Config) error {
 		return err
 	}
 
-	for _, service := range services {
-		d, err := getDevice(service.Location)
+	for _, s := range services {
+		d, err := getDevice(s.Location)
 		if err != nil {
-			log.Printf("Skipping %s: %s", service.Location, err)
+			log.Printf("Skipping %s: %s", s.Location, err)
 			continue
 		}
 
@@ -315,27 +317,35 @@ func discoverDevices(hcConfig hc.Config) error {
 		}
 		log.Printf("Found %s", d)
 
-		sw := accessory.NewSwitch(info)
+		acc := &accessory.Switch{
+			Accessory: accessory.New(info, accessory.TypeSwitch),
+			Switch:    service.NewSwitch(),
+		}
 
 		if d.Type == InsightDeviceURN {
 			d.power = characteristic.NewInt(consumptionUUID)
-			d.power.Characteristic.Unit = "W"
-			sw.Switch.AddCharacteristic(d.power.Characteristic)
+			d.power.Format = characteristic.FormatUInt16
+			d.power.Perms = characteristic.PermsRead()
+			d.power.Unit = "W"
+
+			acc.Switch.AddCharacteristic(d.power.Characteristic)
 			updatePower(d)
 		}
 
-		t, err := hc.NewIPTransport(hcConfig, sw.Accessory)
+		acc.AddService(acc.Switch.Service)
+
+		t, err := hc.NewIPTransport(hcConfig, acc.Accessory)
 		if err != nil {
 			return err
 		}
 
-		sw.Switch.On.OnValueRemoteUpdate(func(on bool) {
+		acc.Switch.On.OnValueRemoteUpdate(func(on bool) {
 			if err := d.Set(on); err != nil {
 				log.Printf("Error setting %s to %t: %s", d, on, err)
 			}
 		})
 
-		d.accessory = sw
+		d.accessory = acc
 		d.transport = t
 
 		devices.m[d.UDN] = d
@@ -371,6 +381,10 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if x := os.Getenv("HC_DEBUG"); x != "" {
+		hclog.Debug.Enable()
+	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "NOTIFY" {
