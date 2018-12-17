@@ -96,7 +96,8 @@ func (d Device) On() (bool, error) {
 	}
 
 	if Debug {
-		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("Requesting binary state for %s:", d)
+		dump, _ := httputil.DumpRequestOut(req, true)
 		log.Printf("%s", string(dump))
 	}
 
@@ -107,6 +108,7 @@ func (d Device) On() (bool, error) {
 	defer resp.Body.Close()
 
 	if Debug {
+		log.Println("Response:")
 		dump, _ := httputil.DumpResponse(resp, true)
 		log.Printf("%s", string(dump))
 	}
@@ -129,7 +131,8 @@ func (d Device) Set(on bool) error {
 	}
 
 	if Debug {
-		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("Setting binary state for %s to %t", d, on)
+		dump, _ := httputil.DumpRequestOut(req, true)
 		log.Printf("%s", string(dump))
 	}
 
@@ -140,6 +143,7 @@ func (d Device) Set(on bool) error {
 	defer resp.Body.Close()
 
 	if Debug {
+		log.Println("Response:")
 		dump, _ := httputil.DumpResponse(resp, true)
 		log.Printf("%s", string(dump))
 	}
@@ -159,7 +163,8 @@ func (d *Device) Subscribe() error {
 	}
 
 	if Debug {
-		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("Subscribing to %s:", d)
+		dump, _ := httputil.DumpRequestOut(req, true)
 		log.Printf("%s", string(dump))
 	}
 
@@ -170,6 +175,7 @@ func (d *Device) Subscribe() error {
 	defer resp.Body.Close()
 
 	if Debug {
+		log.Println("Response:")
 		dump, _ := httputil.DumpResponse(resp, true)
 		log.Printf("%s", string(dump))
 	}
@@ -193,7 +199,8 @@ func (d *Device) Unsubscribe() error {
 	}
 
 	if Debug {
-		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("Unsubscribing from %s:", d)
+		dump, _ := httputil.DumpRequestOut(req, true)
 		log.Printf("%s", string(dump))
 	}
 
@@ -204,6 +211,7 @@ func (d *Device) Unsubscribe() error {
 	defer resp.Body.Close()
 
 	if Debug {
+		log.Println("Response")
 		dump, _ := httputil.DumpResponse(resp, true)
 		log.Printf("%s", string(dump))
 	}
@@ -222,7 +230,8 @@ func (d *Device) InsightParams() (*InsightParams, error) {
 	}
 
 	if Debug {
-		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("Request for insight params from %s:", d)
+		dump, _ := httputil.DumpRequestOut(req, true)
 		log.Printf("%s", string(dump))
 	}
 
@@ -233,6 +242,7 @@ func (d *Device) InsightParams() (*InsightParams, error) {
 	defer resp.Body.Close()
 
 	if Debug {
+		log.Println("Response")
 		dump, _ := httputil.DumpResponse(resp, true)
 		log.Printf("%s", string(dump))
 	}
@@ -316,6 +326,10 @@ func getIPv4Address() net.IP {
 }
 
 func getDevice(u string) (*Device, error) {
+	if Debug {
+		log.Printf("Requesting get info from %s:", u)
+	}
+
 	resp, err := http.Get(u)
 	if err != nil {
 		return nil, err
@@ -323,6 +337,7 @@ func getDevice(u string) (*Device, error) {
 	defer resp.Body.Close()
 
 	if Debug {
+		log.Printf("Response:")
 		dump, _ := httputil.DumpResponse(resp, true)
 		log.Printf("%s", string(dump))
 	}
@@ -455,6 +470,7 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if Debug {
+			log.Printf("Incoming request from %s:", r.RemoteAddr)
 			dump, _ := httputil.DumpRequest(r, true)
 			log.Printf("%s", string(dump))
 		}
