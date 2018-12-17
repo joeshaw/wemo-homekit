@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,6 +23,8 @@ import (
 	"github.com/brutella/hc/service"
 	ssdp "github.com/koron/go-ssdp"
 )
+
+var Debug = false
 
 const (
 	BridgeDeviceURN      = "urn:Belkin:device:bridge:1"
@@ -74,7 +77,7 @@ type Device struct {
 }
 
 func (d Device) String() string {
-        return fmt.Sprintf("%s (at %s)", d.Name, d.baseURL)
+	return fmt.Sprintf("%s (at %s)", d.Name, d.baseURL)
 }
 
 func (d Device) Supported() bool {
@@ -92,11 +95,21 @@ func (d Device) On() (bool, error) {
 		return false, err
 	}
 
+	if Debug {
+		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("%s", string(dump))
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false, err
 	}
 	defer resp.Body.Close()
+
+	if Debug {
+		dump, _ := httputil.DumpResponse(resp, true)
+		log.Printf("%s", string(dump))
+	}
 
 	var res struct {
 		BinaryState int `xml:"Body>GetBinaryStateResponse>BinaryState"`
@@ -115,11 +128,21 @@ func (d Device) Set(on bool) error {
 		return err
 	}
 
+	if Debug {
+		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("%s", string(dump))
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if Debug {
+		dump, _ := httputil.DumpResponse(resp, true)
+		log.Printf("%s", string(dump))
+	}
 
 	return nil
 }
@@ -135,11 +158,21 @@ func (d *Device) Subscribe() error {
 		return err
 	}
 
+	if Debug {
+		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("%s", string(dump))
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if Debug {
+		dump, _ := httputil.DumpResponse(resp, true)
+		log.Printf("%s", string(dump))
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
@@ -159,11 +192,21 @@ func (d *Device) Unsubscribe() error {
 		return err
 	}
 
+	if Debug {
+		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("%s", string(dump))
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if Debug {
+		dump, _ := httputil.DumpResponse(resp, true)
+		log.Printf("%s", string(dump))
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
@@ -178,11 +221,21 @@ func (d *Device) InsightParams() (*InsightParams, error) {
 		return nil, err
 	}
 
+	if Debug {
+		dump, _ := httputil.DumpRequest(req, true)
+		log.Printf("%s", string(dump))
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if Debug {
+		dump, _ := httputil.DumpResponse(resp, true)
+		log.Printf("%s", string(dump))
+	}
 
 	var res struct {
 		InsightParams string `xml:"Body>GetInsightParamsResponse>InsightParams"`
@@ -268,6 +321,11 @@ func getDevice(u string) (*Device, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if Debug {
+		dump, _ := httputil.DumpResponse(resp, true)
+		log.Printf("%s", string(dump))
+	}
 
 	var d Device
 	dec := xml.NewDecoder(resp.Body)
@@ -390,11 +448,17 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if x := os.Getenv("HC_DEBUG"); x != "" {
+	if x := os.Getenv("DEBUG"); x != "" {
 		hclog.Debug.Enable()
+		Debug = true
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if Debug {
+			dump, _ := httputil.DumpRequest(r, true)
+			log.Printf("%s", string(dump))
+		}
+
 		if r.Method != "NOTIFY" {
 			log.Printf("unknown method %s", r.Method)
 			return
@@ -448,6 +512,7 @@ func main() {
 	})
 
 	go func() {
+		log.Println("Starting HTTP server on :1225")
 		panic(http.ListenAndServe(":1225", nil))
 	}()
 
