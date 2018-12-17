@@ -57,12 +57,13 @@ var supportedDeviceTypes = []string{
 }
 
 type Device struct {
-	Type         string `xml:"device>deviceType"`
-	Name         string `xml:"device>friendlyName"`
-	Manufacturer string `xml:"device>manufacturer"`
-	Model        string `xml:"device>modelName"`
-	SerialNumber string `xml:"device>serialNumber"`
-	UDN          string `xml:"device>UDN"`
+	Type            string `xml:"device>deviceType"`
+	Name            string `xml:"device>friendlyName"`
+	Manufacturer    string `xml:"device>manufacturer"`
+	Model           string `xml:"device>modelName"`
+	SerialNumber    string `xml:"device>serialNumber"`
+	FirmwareVersion string `xml:"device>firmwareVersion"`
+	UDN             string `xml:"device>UDN"`
 
 	baseURL string
 	sid     string
@@ -73,7 +74,7 @@ type Device struct {
 }
 
 func (d Device) String() string {
-	return d.Name
+        return fmt.Sprintf("%s (at %s)", d.Name, d.baseURL)
 }
 
 func (d Device) Supported() bool {
@@ -285,7 +286,6 @@ func getDevice(u string) (*Device, error) {
 }
 
 func discoverDevices(hcConfig hc.Config) error {
-	log.Println("Searching for Wemo devices")
 	services, err := ssdp.Search(BasicEventServiceURN, 5, "")
 	if err != nil {
 		return err
@@ -321,6 +321,7 @@ func discoverDevices(hcConfig hc.Config) error {
 			Accessory: accessory.New(info, accessory.TypeSwitch),
 			Switch:    service.NewSwitch(),
 		}
+		acc.Info.FirmwareRevision.SetValue(d.FirmwareVersion)
 
 		if d.Type == InsightDeviceURN {
 			d.power = characteristic.NewInt(consumptionUUID)
@@ -333,6 +334,13 @@ func discoverDevices(hcConfig hc.Config) error {
 		}
 
 		acc.AddService(acc.Switch.Service)
+
+		on, err := d.On()
+		if err != nil {
+			log.Printf("Couldn't get initial state for %s: %v", d, err)
+		} else {
+			acc.Switch.On.SetValue(on)
+		}
 
 		t, err := hc.NewIPTransport(hcConfig, acc.Accessory)
 		if err != nil {
@@ -445,6 +453,9 @@ func main() {
 
 	// Discover devices right away, and then every 30s afterward
 	go func(ctx context.Context) {
+		log.Printf("Starting device discovery loop")
+		defer log.Printf("Editing device discovery loop")
+
 		discoverDevices(hcConfig)
 
 		t := time.NewTicker(discoveryInterval)
@@ -468,9 +479,14 @@ func main() {
 			select {
 			case <-t.C:
 				devices.Lock()
-				for _, d := range devices.m {
+				for udn, d := range devices.m {
 					if err := d.Subscribe(); err != nil {
 						log.Printf("error resubscribing %s: %s", d, err)
+
+						// When resubscribing fails, it's best to nuke it and start from scratch.
+						d.Unsubscribe()
+						<-d.transport.Stop()
+						delete(devices.m, udn)
 					}
 				}
 				devices.Unlock()
