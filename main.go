@@ -417,6 +417,7 @@ func discoverDevices(hcConfig hc.Config) error {
 
 		t, err := hc.NewIPTransport(hcConfig, acc.Accessory)
 		if err != nil {
+			devices.Unlock()
 			return err
 		}
 
