@@ -415,6 +415,9 @@ func discoverDevices(hcConfig hc.Config) error {
 			acc.Switch.On.SetValue(on)
 		}
 
+		//TODO: Change this to a external configuration
+		hcConfig.StoragePath = filepath.Join(os.Getenv("HOME"), ".homecontrol", "wemo", info.Name)
+
 		t, err := hc.NewIPTransport(hcConfig, acc.Accessory)
 		if err != nil {
 			return err
