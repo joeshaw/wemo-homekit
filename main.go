@@ -51,6 +51,8 @@ const (
 	consumptionUUID = "E863F10D-079E-48FF-8F27-9C2605A29F52"
 )
 
+var devicePath = filepath.Join(os.Getenv("HOME"), ".homecontrol", "wemo")
+
 // TODO: Currently only simple switch devices are supported.  It
 // should be simple to add to these, though.
 var supportedDeviceTypes = []string{
@@ -358,7 +360,7 @@ func getDevice(u string) (*Device, error) {
 	return &d, nil
 }
 
-func discoverDevices(hcConfig hc.Config) error {
+func discoverDevices() error {
 	services, err := ssdp.Search(BasicEventServiceURN, 5, "")
 	if err != nil {
 		return err
@@ -415,6 +417,11 @@ func discoverDevices(hcConfig hc.Config) error {
 			acc.Switch.On.SetValue(on)
 		}
 
+		hcConfig := hc.Config{
+			Pin:         "00102003",
+			StoragePath: filepath.Join(devicePath, d.SerialNumber),
+		}
+
 		t, err := hc.NewIPTransport(hcConfig, acc.Accessory)
 		if err != nil {
 			devices.Unlock()
@@ -455,12 +462,6 @@ func updatePower(d *Device) {
 }
 
 func main() {
-	// TODO: make configurable
-	hcConfig := hc.Config{
-		Pin:         "00102003",
-		StoragePath: filepath.Join(os.Getenv("HOME"), ".homecontrol", "wemo"),
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -538,7 +539,7 @@ func main() {
 		log.Printf("Starting device discovery loop")
 		defer log.Printf("Editing device discovery loop")
 
-		discoverDevices(hcConfig)
+		discoverDevices()
 
 		t := time.NewTicker(discoveryInterval)
 		defer t.Stop()
@@ -546,7 +547,7 @@ func main() {
 		for {
 			select {
 			case <-t.C:
-				discoverDevices(hcConfig)
+				discoverDevices()
 			case <-ctx.Done():
 			}
 		}
