@@ -1,8 +1,7 @@
 
-# wemo-homecontrol
+# wemo-homekit
 
-HomeKit support for Wemo devices using
-[HomeControl](https://github.com/brutella/hc).
+HomeKit support for Wemo devices.
 
 Currently this service only supports Wemo (outlet) switches and light
 switches.  If it is a newer "insight" switch, power consumption is
@@ -18,11 +17,11 @@ an Apple TV or iPad, you can control the device remotely.
 
 The tool can be installed with:
 
-    go get -u github.com/joeshaw/wemo-homecontrol
+    go get -u github.com/joeshaw/wemo-homekit
 
 Then you can run the service:
 
-    wemo-homecontrol
+    wemo-homekit
 
 The service will search for Wemo devices on your local network at
 startup, and even every 30 seconds afterward.
@@ -45,7 +44,7 @@ sure the code has been run through `gofmt`.
 
 Copyright 2017 Joe Shaw
 
-`wemo-homecontrol` is licensed under the MIT License.  See the LICENSE file
+`wemo-homekit` is licensed under the MIT License.  See the LICENSE file
 for details.
 
 

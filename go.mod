@@ -1,4 +1,4 @@
-module github.com/joeshaw/wemo-homecontrol
+module github.com/joeshaw/wemo-homekit
 
 go 1.12
 
