@@ -281,7 +281,6 @@ func (d *Device) InsightParams() (*InsightParams, error) {
 		TotalMWPerMinute: atoi(strings.Split(parts[9], ".")[0]),
 		PowerThreshold:   atoi(parts[10]),
 	}, nil
-
 }
 
 type InsightParams struct {
@@ -568,7 +567,9 @@ func main() {
 
 						// When resubscribing fails, it's best to nuke it and start from scratch.
 						d.Unsubscribe()
+						log.Printf("stopping transport for %s", d)
 						<-d.transport.Stop()
+						log.Printf("stopped transport for %s", d)
 						delete(devices.m, udn)
 					}
 				}
@@ -738,5 +739,4 @@ func unsubscribeRequest(baseURL, sid string) (*http.Request, error) {
 	req.Header.Add("SID", sid)
 
 	return req, nil
-
 }
