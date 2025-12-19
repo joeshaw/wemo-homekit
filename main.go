@@ -536,9 +536,11 @@ func main() {
 	// Discover devices right away, and then every 30s afterward
 	go func(ctx context.Context) {
 		log.Printf("Starting device discovery loop")
-		defer log.Printf("Editing device discovery loop")
+		defer log.Printf("Exiting device discovery loop")
 
-		discoverDevices()
+		if err := discoverDevices(); err != nil {
+			log.Printf("error during initial device discovery: %s", err)
+		}
 
 		t := time.NewTicker(discoveryInterval)
 		defer t.Stop()
@@ -546,7 +548,9 @@ func main() {
 		for {
 			select {
 			case <-t.C:
-				discoverDevices()
+				if err := discoverDevices(); err != nil {
+					log.Printf("error during device discovery: %s", err)
+				}
 			case <-ctx.Done():
 			}
 		}
